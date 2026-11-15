@@ -1,0 +1,41 @@
+name: triad-ai
+
+services:
+  mongo:
+    image: mongo:8.0
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "quit(db.adminCommand({ ping: 1 }).ok === 1 ? 0 : 1)"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build: ./backend
+    environment:
+      MONGODB_URI: "${MONGODB_URI:-mongodb://mongo:27017}"
+    ports:
+      - "127.0.0.1:5001:5000"
+    volumes:
+      - ./backend/app.py:/app/app.py:ro
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:5174:5173"
+    volumes:
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.js:/app/vite.config.js:ro
+      - ./frontend/src:/app/src:ro
+
+volumes:
+  mongo_data:
