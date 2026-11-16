@@ -159,10 +159,33 @@ function Details({ session, id }) {
   </section>
 }
 
+function Search({ session }) {
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const state = useResource(session, query ? '/search?' + new URLSearchParams({ q: query, page }) : null)
+  return <section className="work-section">
+    <h3>Advanced search</h3>
+    <p>Search document titles, metadata, and extracted text in your division.</p>
+    <form className="workspace-form" onSubmit={(event) => {
+      event.preventDefault()
+      setQuery(new FormData(event.currentTarget).get('q').trim())
+      setPage(1)
+    }}>
+      <fieldset>
+        <label htmlFor="search-query">Search documents</label>
+        <input id="search-query" name="q" type="search" maxLength={100} required />
+      </fieldset>
+      <button className="primary-button">Search</button>
+    </form>
+    {query && <Results state={state} page={page} setPage={setPage} />}
+  </section>
+}
+
+
 function locationView() {
   const hash = window.location.hash.slice(1)
   if (/^documents\/[a-f0-9]{24}$/i.test(hash)) return hash
-  if (['documents', 'upload', 'settings', 'requests'].includes(hash)) return hash
+  if (['documents', 'upload', 'settings', 'requests', 'search'].includes(hash)) return hash
   return 'documents'
 }
 
@@ -178,7 +201,7 @@ export default function Workspace({ session, signOut, busy }) {
     return () => window.removeEventListener('hashchange', update)
   }, [])
 
-  const links = [['documents', 'Documents'], ['upload', 'Upload'], ['requests', 'Requests'], ...(admin ? [['settings', 'Settings']] : [])]
+  const links = [['documents', 'Documents'], ['upload', 'Upload'], ['requests', 'Requests'], ['search', 'Search'], ...(admin ? [['settings', 'Settings']] : [])]
   return <>
     <div className="workspace-account">
       <div><strong>{session.user.email}</strong><p>{session.user.division}</p></div>
@@ -192,6 +215,7 @@ export default function Workspace({ session, signOut, busy }) {
     </nav>
     {view.startsWith('documents/') ? <Details key={view} session={session} id={view.split('/')[1]} />
       : view === 'upload' ? <UploadPanel session={session} />
+      : view === 'search' ? <Search session={session} />
       : view === 'requests' ? <Inbox session={session} useResource={useResource} Pending={Pending} />
       : view === 'settings' && admin ? <Settings session={session} onSave={() => setRevision((value) => value + 1)} />
       : metadata.data ? <Hub session={session} fields={metadata.data.fields} /> : <Pending state={metadata} />}

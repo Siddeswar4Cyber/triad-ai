@@ -39,6 +39,7 @@ services:
       - ./backend/access_requests.py:/app/access_requests.py:ro
 
       - ./backend/ocr_worker.py:/app/ocr_worker.py:ro
+      - ./backend/search_documents.py:/app/search_documents.py:ro
 
   ocr:
     build:

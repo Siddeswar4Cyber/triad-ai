@@ -216,7 +216,7 @@ def page_response(query, fields):
     except ValueError:
         return jsonify(error="Page must be between 1 and 10000."), 400
 
-    rows = list(get_database().documents.find(query, {"ocr_text": 0})
+    rows = list(get_database().documents.find(query, {"ocr_text": 0}).max_time_ms(2000)
                 .sort([("created_at", -1), ("_id", -1)])
                 .skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE + 1))
     return jsonify(documents=[document_summary(row, fields) for row in rows[:PAGE_SIZE]],

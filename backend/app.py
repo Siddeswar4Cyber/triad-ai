@@ -6,10 +6,10 @@ from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
 from access_requests import access, init_access_indexes
-from auth import auth, init_auth_indexes
+from auth import auth, get_database, init_auth_indexes
 from documents import documents
 from metadata_fields import metadata_api, promote_admin, seed_metadata
-from auth import get_database
+from search_documents import search
 from ocr_worker import backfill
 
 def create_app():
@@ -25,6 +25,7 @@ def create_app():
     app.register_blueprint(documents)
     app.register_blueprint(metadata_api)
     app.register_blueprint(access)
+    app.register_blueprint(search)
     app.cli.command('init-access')(init_access_indexes)
     app.cli.command("init-auth")(init_auth_indexes)
     app.cli.command("init-metadata")(seed_metadata)
