@@ -14,6 +14,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 from auth import DIVISIONS, get_database, require_user
+from metadata_fields import definitions, validate_values
 
 
 documents = Blueprint("documents", __name__, url_prefix="/api/documents")
@@ -101,7 +102,9 @@ def upload():
             for key in ("Division", "division", "division_id", "owner_division_id"):
                 if any(value not in (division_id, DIVISIONS[division_id]) for value in carrier.getlist(key)):
                     raise PermissionError("You can only upload to your own division.")
-        metadata = read_metadata(request.form.get("metadata", "{}"), division_id)
+        metadata = validate_values(
+            read_metadata(request.form.get("metadata", "{}"), division_id), definitions(active_only=True)
+        )
     except PermissionError as error:
         return jsonify(error=str(error)), 403
     except (json.JSONDecodeError, UnicodeError, RecursionError):
@@ -136,7 +139,7 @@ def upload():
         "title": PurePosixPath(filename).stem,
         "content_type": content_type,
         "size": size,
-        "metadata": metadata,
+        "metadata_fields": metadata,
         "created_at": datetime.now(timezone.utc),
     }
 

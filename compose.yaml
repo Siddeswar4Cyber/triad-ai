@@ -33,6 +33,7 @@ services:
       - ./backend/app.py:/app/app.py:ro
       - ./backend/auth.py:/app/auth.py:ro
       - ./backend/documents.py:/app/documents.py:ro
+      - ./backend/metadata_fields.py:/app/metadata_fields.py:ro
 
   frontend:
     build: ./frontend

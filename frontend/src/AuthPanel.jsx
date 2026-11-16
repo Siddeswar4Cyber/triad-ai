@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import UploadPanel from './UploadPanel.jsx'
+import Settings from './Settings.jsx'
 
 async function authRequest(path, { method = 'GET', body, token, signal } = {}) {
   const headers = {}
@@ -35,6 +36,7 @@ export default function AuthPanel() {
   const [divisionState, setDivisionState] = useState('loading')
   const [attempt, setAttempt] = useState(0)
   const [session, setSession] = useState(null)
+  const [metadataVersion, setMetadataVersion] = useState(0)
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
   const heading = useRef(null)
@@ -132,7 +134,9 @@ export default function AuthPanel() {
               <div><dt>Email</dt><dd>{session.user.email}</dd></div>
               <div><dt>Division</dt><dd>{session.user.division}</dd></div>
             </dl>
-            <UploadPanel session={session} />
+            <UploadPanel key={metadataVersion} session={session} />
+            {session.user.role === 'admin' && <Settings session={session} onSave={() =>
+              setMetadataVersion((value) => value + 1)} />}
             <button className="primary-button" type="button" disabled={busy} onClick={signOut}>
               {busy ? 'Signing out…' : 'Sign out'}
             </button>

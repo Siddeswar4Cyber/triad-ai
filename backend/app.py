@@ -1,11 +1,13 @@
 import os  # noqa: I001
 
+import click
 from flask import Flask, jsonify
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
 from auth import auth, init_auth_indexes
 from documents import documents
+from metadata_fields import metadata_api, promote_admin, seed_metadata
 
 def create_app():
     app = Flask(__name__)
@@ -18,7 +20,10 @@ def create_app():
     app.extensions["triad_db"] = mongo[database_name]
     app.register_blueprint(auth)
     app.register_blueprint(documents)
+    app.register_blueprint(metadata_api)
     app.cli.command("init-auth")(init_auth_indexes)
+    app.cli.command("init-metadata")(seed_metadata)
+    app.cli.command("promote-admin")(click.argument("email")(promote_admin))
 
     @app.get("/api/health")
     def health_check():

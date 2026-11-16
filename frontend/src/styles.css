@@ -102,3 +102,9 @@ input::placeholder { color: #5d6c63; }
 .upload-panel h3 { margin: 0 0 .45rem; color: var(--ink); }
 .upload-panel form { margin-top: .85rem; }
 .upload-panel input[type="file"] { font-size: .85rem; }
+
+.work-section { margin-block: 1.4rem; min-width: 0; }
+.action-row { display: flex; flex-wrap: wrap; gap: .5rem 1rem; align-items: center; }
+.option-editor { display: grid; gap: .4rem; min-width: 0; }
+.check-label { display: flex; gap: .5rem; align-items: center; }
+.check-label input { width: 1rem; min-height: 1rem; }
