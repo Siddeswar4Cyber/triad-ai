@@ -4,6 +4,9 @@ from flask import Flask, jsonify
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 
+from auth import auth, init_auth_indexes
+from documents import documents
+
 def create_app():
     app = Flask(__name__)
     mongo = MongoClient(
@@ -11,6 +14,11 @@ def create_app():
         connect=False,
         timeoutMS=3000,
     )
+    database_name = os.getenv("MONGODB_DATABASE", "triad_dms")
+    app.extensions["triad_db"] = mongo[database_name]
+    app.register_blueprint(auth)
+    app.register_blueprint(documents)
+    app.cli.command("init-auth")(init_auth_indexes)
 
     @app.get("/api/health")
     def health_check():

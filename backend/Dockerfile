@@ -6,5 +6,5 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
 
-COPY app.py ./
-CMD ["python", "-m", "flask", "--app", "app", "run", "--debug", "--host", "0.0.0.0", "--port", "5000"]
+COPY app.py auth.py documents.py smoke_auth.py ./
+CMD ["sh", "-c", "python -m flask --app app init-auth && exec python -m flask --app app run --debug --host 0.0.0.0 --port 5000"]

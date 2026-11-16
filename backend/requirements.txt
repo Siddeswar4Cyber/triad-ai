@@ -7,3 +7,5 @@ Jinja2==3.1.6
 MarkupSafe==3.0.4
 pymongo==4.20.0
 Werkzeug==3.1.9
+Pillow==13.0.0
+pypdf==7.1.0

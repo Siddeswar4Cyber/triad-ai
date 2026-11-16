@@ -21,12 +21,18 @@ services:
 
   backend:
     build: ./backend
+    depends_on:
+      mongo:
+        condition: service_healthy
     environment:
       MONGODB_URI: "${MONGODB_URI:-mongodb://mongo:27017}"
+      MONGODB_DATABASE: "${MONGODB_DATABASE:-triad_dms}"
     ports:
       - "127.0.0.1:5001:5000"
     volumes:
       - ./backend/app.py:/app/app.py:ro
+      - ./backend/auth.py:/app/auth.py:ro
+      - ./backend/documents.py:/app/documents.py:ro
 
   frontend:
     build: ./frontend
