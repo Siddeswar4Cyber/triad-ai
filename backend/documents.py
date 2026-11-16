@@ -141,6 +141,8 @@ def upload():
         "content_type": content_type,
         "size": size,
         "metadata_fields": metadata,
+        "ocr_status": "pending",
+        "ocr_attempts": 0,
         "created_at": datetime.now(timezone.utc),
     }
 
@@ -191,6 +193,8 @@ def document_summary(row, fields):
         "division": DIVISIONS[row["owner_division_id"]],
         "created_at": row["created_at"].replace(tzinfo=timezone.utc).isoformat(),
         "metadata": display_values(row, fields),
+        "ocr_status": row.get("ocr_status", "not_queued"),
+        "ocr_error": row.get("ocr_error"),
     }
 
 

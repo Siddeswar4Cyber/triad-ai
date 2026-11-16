@@ -132,6 +132,9 @@ function Details({ session, id }) {
       <div><dt>Division</dt><dd>{doc.division}</dd></div>
       {doc.can_download && <>
         <div><dt>File</dt><dd>{doc.filename}</dd></div>
+        <div><dt>Searchable text</dt><dd>{doc.ocr_status === 'ready' ? 'Ready'
+          : doc.ocr_status === 'failed' ? doc.ocr_error || 'OCR failed'
+          : doc.ocr_status === 'not_queued' ? 'Awaiting backfill' : 'Processing'}</dd></div>
         {Object.entries(doc.metadata).map(([key, value]) =>
           <div key={key}><dt>{key}</dt><dd>{String(value)}</dd></div>)}
       </>}
@@ -140,7 +143,11 @@ function Details({ session, id }) {
       <button type="button" className="primary-button" disabled={downloading} onClick={download}>
         {downloading ? 'Downloading…' : 'Download'}
       </button>
-      <button type="button" className="quiet-button" onClick={copyLink}>Copy document link</button>
+      <div className="action-row">
+        <button type="button" className="quiet-button" onClick={copyLink}>Copy document link</button>
+        {['pending', 'processing'].includes(doc.ocr_status) && <button type="button" className="quiet-button"
+          onClick={() => setRevision((value) => value + 1)}>Refresh OCR status</button>}
+      </div>
     </> : doc.request_status ? <>
       <p role="status">Access request: {doc.request_status}.</p>
       <button className="quiet-button" type="button" onClick={() => setRevision((value) => value + 1)}>Refresh access</button>

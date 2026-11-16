@@ -9,6 +9,8 @@ from access_requests import access, init_access_indexes
 from auth import auth, init_auth_indexes
 from documents import documents
 from metadata_fields import metadata_api, promote_admin, seed_metadata
+from auth import get_database
+from ocr_worker import backfill
 
 def create_app():
     app = Flask(__name__)
@@ -27,6 +29,10 @@ def create_app():
     app.cli.command("init-auth")(init_auth_indexes)
     app.cli.command("init-metadata")(seed_metadata)
     app.cli.command("promote-admin")(click.argument("email")(promote_admin))
+
+    @app.cli.command("backfill-ocr")
+    def backfill_ocr():
+        click.echo(f"Queued {backfill(get_database())} existing document(s).")
 
     @app.get("/api/health")
     def health_check():

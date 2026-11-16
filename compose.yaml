@@ -20,7 +20,9 @@ services:
       start_period: 10s
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: backend
     depends_on:
       mongo:
         condition: service_healthy
@@ -35,6 +37,23 @@ services:
       - ./backend/documents.py:/app/documents.py:ro
       - ./backend/metadata_fields.py:/app/metadata_fields.py:ro
       - ./backend/access_requests.py:/app/access_requests.py:ro
+
+      - ./backend/ocr_worker.py:/app/ocr_worker.py:ro
+
+  ocr:
+    build:
+      context: ./backend
+      target: ocr
+    init: true
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      MONGODB_URI: "${MONGODB_URI:-mongodb://mongo:27017}"
+      MONGODB_DATABASE: "${MONGODB_DATABASE:-triad_dms}"
 
   frontend:
     build: ./frontend
