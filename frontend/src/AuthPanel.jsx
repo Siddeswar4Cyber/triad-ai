@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import UploadPanel from './UploadPanel.jsx'
-import Settings from './Settings.jsx'
+import Workspace from './Workspace.jsx'
 
 async function authRequest(path, { method = 'GET', body, token, signal } = {}) {
   const headers = {}
@@ -36,7 +35,7 @@ export default function AuthPanel() {
   const [divisionState, setDivisionState] = useState('loading')
   const [attempt, setAttempt] = useState(0)
   const [session, setSession] = useState(null)
-  const [metadataVersion, setMetadataVersion] = useState(0)
+
   const [feedback, setFeedback] = useState(null)
   const [busy, setBusy] = useState(false)
   const heading = useRef(null)
@@ -111,7 +110,7 @@ export default function AuthPanel() {
   }
 
   return (
-    <section id="account" className="account-panel" aria-labelledby="auth-heading" tabIndex={-1}>
+    <section id="account" className={session ? "account-panel signed-in" : "account-panel"} aria-labelledby="auth-heading" tabIndex={-1}>
       <div className="account-content">
         {!session && (
           <div className="auth-modes" role="group" aria-label="Account action">
@@ -120,7 +119,7 @@ export default function AuthPanel() {
           </div>
         )}
         <h2 id="auth-heading" ref={heading} tabIndex={-1}>
-          {session ? 'Your account' : registering ? 'Create your account' : 'Welcome back'}
+          {session ? 'Your workspace' : registering ? 'Create your account' : 'Welcome back'}
         </h2>
         <p className="account-description">
           {session ? 'You are signed in to TRIAD AI.' : registering ? 'Choose a division for your account.' : 'Enter your email and password to sign in.'}
@@ -129,18 +128,7 @@ export default function AuthPanel() {
         {feedback && <p className={`feedback ${feedback.error ? 'error' : 'success'}`} role={feedback.error ? 'alert' : 'status'}>{feedback.text}</p>}
 
         {session ? (
-          <>
-            <dl className="account-details">
-              <div><dt>Email</dt><dd>{session.user.email}</dd></div>
-              <div><dt>Division</dt><dd>{session.user.division}</dd></div>
-            </dl>
-            <UploadPanel key={metadataVersion} session={session} />
-            {session.user.role === 'admin' && <Settings session={session} onSave={() =>
-              setMetadataVersion((value) => value + 1)} />}
-            <button className="primary-button" type="button" disabled={busy} onClick={signOut}>
-              {busy ? 'Signing out…' : 'Sign out'}
-            </button>
-          </>
+          <Workspace session={session} signOut={signOut} busy={busy} />
         ) : (
           <form key={mode} onSubmit={submit} aria-busy={busy}>
             <fieldset disabled={busy}>

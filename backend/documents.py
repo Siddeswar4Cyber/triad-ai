@@ -4,8 +4,9 @@ from datetime import datetime, timezone
 from pathlib import PurePosixPath
 
 from bson import ObjectId
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, Response, current_app, g, jsonify, request
 from gridfs import GridFSBucket
+from gridfs.errors import NoFile
 from PIL import Image
 from pymongo.errors import PyMongoError
 from pypdf import PdfReader
@@ -14,7 +15,7 @@ from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 from auth import DIVISIONS, get_database, require_user
-from metadata_fields import definitions, validate_values
+from metadata_fields import definitions, display_values, names, option_for, validate_values
 
 
 documents = Blueprint("documents", __name__, url_prefix="/api/documents")
@@ -160,3 +161,112 @@ def upload():
         content_type=content_type, size=size, metadata=metadata,
         owner_division_id=division_id,
     ), 201
+
+
+PAGE_SIZE = 20
+
+
+def find_document(doc_id):
+    if not ObjectId.is_valid(doc_id):
+        return None
+    return get_database().documents.find_one({"_id": ObjectId(doc_id)}, {"ocr_text": 0})
+
+
+def can_read(row):
+    return row["owner_division_id"] == g.user["division_id"]
+
+
+def document_summary(row, fields):
+    return {
+        "doc_id": str(row["_id"]), "title": row["title"], "filename": row["filename"],
+        "size": row["size"], "content_type": row["content_type"],
+        "owner_division_id": row["owner_division_id"],
+        "division": DIVISIONS[row["owner_division_id"]],
+        "created_at": row["created_at"].replace(tzinfo=timezone.utc).isoformat(),
+        "metadata": display_values(row, fields),
+    }
+
+
+def filter_for(field, value):
+    option = option_for(field, value) if field["type"] == "select" else None
+    current = option["id"] if option else value
+    equivalent = list({value, current, option["label"], *option.get("aliases", [])}) if option else [value]
+    return {"$or": [
+        {"metadata_fields." + field["key"]: current},
+        *[{"metadata." + name: {"$in": equivalent}} for name in names(field)],
+    ]}
+
+
+def page_response(query, fields):
+    try:
+        page = int(request.args.get("page", "1"))
+        if not 1 <= page <= 10000:
+            raise ValueError()
+    except ValueError:
+        return jsonify(error="Page must be between 1 and 10000."), 400
+
+    rows = list(get_database().documents.find(query, {"ocr_text": 0})
+                .sort([("created_at", -1), ("_id", -1)])
+                .skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE + 1))
+    return jsonify(documents=[document_summary(row, fields) for row in rows[:PAGE_SIZE]],
+                   page=page, has_more=len(rows) > PAGE_SIZE)
+
+
+@documents.get("")
+@require_user
+def list_documents():
+    division = g.user["division_id"]
+    fields = definitions()
+    filters = [{"owner_division_id": division}]
+    lookup = {name: field for field in fields for name in names(field)}
+    for key, value in request.args.items():
+        if not value or key == "page":
+            continue
+        if key.casefold() in {"division", "division_id", "owner_division_id"}:
+            target = next((identifier for identifier, label in DIVISIONS.items()
+                           if value in (identifier, label)), "")
+            filters.append({"owner_division_id": target})
+        elif key in lookup and len(value) <= 500:
+            filters.append(filter_for(lookup[key], value))
+        else:
+            return jsonify(error="Unknown document filter or invalid value."), 400
+    return page_response({"$and": filters}, fields)
+
+
+@documents.get("/<doc_id>")
+@require_user
+def document_details(doc_id):
+    row = find_document(doc_id)
+    if row is None:
+        return jsonify(error="Document not found."), 404
+    if not can_read(row):
+        return jsonify(document={"doc_id": doc_id, "division": DIVISIONS[row["owner_division_id"]],
+                                 "can_download": False})
+    return jsonify(document={**document_summary(row, definitions()), "can_download": True})
+
+
+@documents.get("/<doc_id>/download")
+@require_user
+def download_document(doc_id):
+    row = find_document(doc_id)
+    if row is None or not can_read(row):
+        return jsonify(error="Document not found or access unavailable."), 404
+    try:
+        stream = GridFSBucket(get_database()).open_download_stream(row["gridfs_file_id"])
+    except NoFile:
+        return jsonify(error="The stored file is unavailable."), 404
+
+    def chunks():
+        try:
+            while chunk := stream.read(255 * 1024):
+                yield chunk
+        finally:
+            stream.close()
+
+    response = Response(chunks(), mimetype=row["content_type"])
+    response.content_length = stream.length
+    response.headers.set("Content-Disposition", "attachment", filename=row["filename"])
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.call_on_close(stream.close)
+    return response
