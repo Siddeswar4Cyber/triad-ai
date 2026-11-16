@@ -162,7 +162,8 @@ function Details({ session, id }) {
 function Search({ session }) {
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
-  const state = useResource(session, query ? '/search?' + new URLSearchParams({ q: query, page }) : null)
+  const [revision, setRevision] = useState(0)
+  const state = useResource(session, query ? '/search?' + new URLSearchParams({ q: query, page }) : null, revision)
   return <section className="work-section">
     <h3>Advanced search</h3>
     <p>Search document titles, metadata, and extracted text in your division.</p>
@@ -170,6 +171,7 @@ function Search({ session }) {
       event.preventDefault()
       setQuery(new FormData(event.currentTarget).get('q').trim())
       setPage(1)
+      setRevision((value) => value + 1)
     }}>
       <fieldset>
         <label htmlFor="search-query">Search documents</label>
