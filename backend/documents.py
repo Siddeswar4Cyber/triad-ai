@@ -167,13 +167,20 @@ PAGE_SIZE = 20
 
 
 def find_document(doc_id):
-    if not ObjectId.is_valid(doc_id):
+    if not isinstance(doc_id, str) or not ObjectId.is_valid(doc_id):
         return None
     return get_database().documents.find_one({"_id": ObjectId(doc_id)}, {"ocr_text": 0})
 
 
+def access_status(row):
+    entry = get_database().access_requests.find_one(
+        {"document_id": row["_id"], "requester_id": g.user["_id"]}, {"status": 1}
+    )
+    return entry["status"] if entry else None
+
+
 def can_read(row):
-    return row["owner_division_id"] == g.user["division_id"]
+    return row["owner_division_id"] == g.user["division_id"] or access_status(row) == "approved"
 
 
 def document_summary(row, fields):
@@ -239,9 +246,11 @@ def document_details(doc_id):
     row = find_document(doc_id)
     if row is None:
         return jsonify(error="Document not found."), 404
-    if not can_read(row):
-        return jsonify(document={"doc_id": doc_id, "division": DIVISIONS[row["owner_division_id"]],
-                                 "can_download": False})
+    if row["owner_division_id"] != g.user["division_id"]:
+        status = access_status(row)
+        if status != "approved":
+            return jsonify(document={"doc_id": str(row["_id"]), "division": DIVISIONS[row["owner_division_id"]],
+                                     "can_download": False, "request_status": status})
     return jsonify(document={**document_summary(row, definitions()), "can_download": True})
 
 

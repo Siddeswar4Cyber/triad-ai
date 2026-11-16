@@ -34,6 +34,7 @@ services:
       - ./backend/auth.py:/app/auth.py:ro
       - ./backend/documents.py:/app/documents.py:ro
       - ./backend/metadata_fields.py:/app/metadata_fields.py:ro
+      - ./backend/access_requests.py:/app/access_requests.py:ro
 
   frontend:
     build: ./frontend

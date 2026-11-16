@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from './api.js'
 import Settings from './Settings.jsx'
+import Inbox from './Inbox.jsx'
 import UploadPanel from './UploadPanel.jsx'
 
 function useResource(session, path, revision) {
@@ -75,7 +76,9 @@ function Hub({ session, fields }) {
 }
 
 function Details({ session, id }) {
-  const state = useResource(session, '/documents/' + id)
+  const [revision, setRevision] = useState(0)
+  const [requesting, setRequesting] = useState(false)
+  const state = useResource(session, '/documents/' + id, revision)
   const [notice, setNotice] = useState(null)
   const [downloading, setDownloading] = useState(false)
   if (!state.data) return <Pending state={state} />
@@ -98,6 +101,19 @@ function Details({ session, id }) {
       setNotice({ error: true, text: error.message })
     } finally {
       setDownloading(false)
+    }
+  }
+
+  async function requestAccess() {
+    setRequesting(true)
+    setNotice(null)
+    try {
+      await api(session, '/access/request', { method: 'POST', body: { doc_id: id } })
+      setRevision((value) => value + 1)
+    } catch (error) {
+      setNotice({ error: true, text: error.message })
+    } finally {
+      setRequesting(false)
     }
   }
 
@@ -125,7 +141,12 @@ function Details({ session, id }) {
         {downloading ? 'Downloading…' : 'Download'}
       </button>
       <button type="button" className="quiet-button" onClick={copyLink}>Copy document link</button>
-    </> : <p>This file belongs to another division.</p>}
+    </> : doc.request_status ? <>
+      <p role="status">Access request: {doc.request_status}.</p>
+      <button className="quiet-button" type="button" onClick={() => setRevision((value) => value + 1)}>Refresh access</button>
+    </> : <button className="primary-button" type="button" disabled={requesting} onClick={requestAccess}>
+      {requesting ? 'Sending…' : 'Request access'}
+    </button>}
     {notice && <p className={'feedback ' + (notice.error ? 'error' : 'success')}
       role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
   </section>
@@ -134,7 +155,7 @@ function Details({ session, id }) {
 function locationView() {
   const hash = window.location.hash.slice(1)
   if (/^documents\/[a-f0-9]{24}$/i.test(hash)) return hash
-  if (['documents', 'upload', 'settings'].includes(hash)) return hash
+  if (['documents', 'upload', 'settings', 'requests'].includes(hash)) return hash
   return 'documents'
 }
 
@@ -150,7 +171,7 @@ export default function Workspace({ session, signOut, busy }) {
     return () => window.removeEventListener('hashchange', update)
   }, [])
 
-  const links = [['documents', 'Documents'], ['upload', 'Upload'], ...(admin ? [['settings', 'Settings']] : [])]
+  const links = [['documents', 'Documents'], ['upload', 'Upload'], ['requests', 'Requests'], ...(admin ? [['settings', 'Settings']] : [])]
   return <>
     <div className="workspace-account">
       <div><strong>{session.user.email}</strong><p>{session.user.division}</p></div>
@@ -164,6 +185,7 @@ export default function Workspace({ session, signOut, busy }) {
     </nav>
     {view.startsWith('documents/') ? <Details key={view} session={session} id={view.split('/')[1]} />
       : view === 'upload' ? <UploadPanel session={session} />
+      : view === 'requests' ? <Inbox session={session} useResource={useResource} Pending={Pending} />
       : view === 'settings' && admin ? <Settings session={session} onSave={() => setRevision((value) => value + 1)} />
       : metadata.data ? <Hub session={session} fields={metadata.data.fields} /> : <Pending state={metadata} />}
   </>
