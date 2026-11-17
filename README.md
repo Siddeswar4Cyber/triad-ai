@@ -35,7 +35,7 @@ docker compose exec -T backend python -m flask --app app backfill-ocr
 
 ## REST API
 
-Protected routes accept `Authorization: Bearer <token>`. Login returns an eight-hour token. The browser holds it in memory. Signup creates an ordinary user.
+Protected routes accept `Authorization: Bearer <token>`. Login returns an eight-hour token. The browser keeps the token in the current tab session so full-page navigation preserves sign-in. Signup creates an ordinary user.
 
 | Method | Path | Input or behavior |
 |---|---|---|
@@ -74,4 +74,4 @@ Both smoke scripts create and remove their own temporary MongoDB databases. The 
 - Nginx serves the static frontend and proxies `/api` to Flask inside Docker. The direct health endpoint on port 5001 helps distinguish a Flask error from a proxy error.
 - `docker compose down` preserves the `mongo_data` named volume. Use `down -v` only for a disposable stack whose data you want to erase.
 
-The root `requirements.txt` delegates to the backend manifest. Docker installs the Python dependencies during image builds. The static frontend uses browser modules and requires no JavaScript packages or build step. Keep local `.env`, generated test reports, and document data out of Git.
+The root `requirements.txt` delegates to the backend manifest. Docker installs the Python dependencies during image builds. The frontend serves separate HTML pages for sign-in, registration, documents, details, upload, requests, search, settings, and system status. It uses browser modules and requires no JavaScript packages or build step. Keep local `.env`, generated test reports, and document data out of Git.

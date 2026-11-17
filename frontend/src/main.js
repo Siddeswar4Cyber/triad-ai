@@ -1,20 +1,33 @@
 import { api } from './api.js'
 import { element as el, button, selectInput, textInput, formWith, feedback } from './dom.js'
-import { workspace } from './workspace.js'
+import { pagePaths, documentUrl, workspace } from './workspace.js'
 
-const panel = document.querySelector('#account')
-const content = document.querySelector('#account-content')
-const intro = document.querySelector('#workspace-intro')
-const refresh = document.querySelector('#check-status')
-let session
-let cleanup
-let email = ''
+const page = document.body.dataset.page
+const tokenKey = 'triad.session'
+const query = new URLSearchParams(location.search)
+
+function safeDestination(value) {
+  try {
+    const url = new URL(value || pagePaths.documents, location.origin)
+    if (url.origin === location.origin && Object.values(pagePaths).includes(url.pathname)) {
+      return url.pathname + url.search
+    }
+  } catch {
+    // Invalid or external destinations fall back to the Hub.
+  }
+  return pagePaths.documents
+}
+
+function signInUrl(destination) {
+  return '/?' + new URLSearchParams({ next: safeDestination(destination) })
+}
 
 function setStatus(id, text, state = '') {
   document.querySelector(id).replaceChildren(el('span', { class: 'dot ' + state, 'aria-hidden': 'true' }), text)
 }
 
 async function health() {
+  const refresh = document.querySelector('#check-status')
   refresh.disabled = true
   setStatus('#api-status', 'Checking')
   setStatus('#db-status', 'Checking')
@@ -38,15 +51,15 @@ async function health() {
   }
 }
 
-function auth(mode = 'login', notice, focus = false) {
-  cleanup?.()
-  cleanup = null
-  panel.classList.remove('signed-in')
-  intro.textContent = 'Sign in to your division workspace.'
+function auth() {
+  const mode = page
   const registering = mode === 'register'
-  const heading = el('h2', { id: 'auth-heading', tabindex: -1 }, registering ? 'Create your account' : 'Welcome back')
+  const destination = safeDestination(query.get('next'))
+  const content = document.querySelector('#auth-content')
   const region = el('div')
-  feedback(region, notice)
+  if (query.has('registered')) feedback(region, 'Account created. You can now sign in.')
+  if (query.has('signed-out')) feedback(region, 'You signed out.')
+
   const password = el('input', { id: 'password', name: 'password', type: 'password',
     autocomplete: registering ? 'new-password' : 'current-password', minlength: 8, maxlength: 128,
     'aria-describedby': registering ? 'password-help' : null, required: true })
@@ -71,31 +84,52 @@ function auth(mode = 'login', notice, focus = false) {
     }
   }
   const form = formWith([
-    textInput('email', 'Email address', { type: 'email', value: email, autocomplete: 'username',
-      maxlength: 254, placeholder: 'you@example.com', required: true,
-      oninput: (event) => { email = event.target.value } }),
+    textInput('email', 'Email address', { type: 'email', autocomplete: 'username',
+      maxlength: 254, placeholder: 'you@example.com', required: true }),
     el('label', { for: 'password' }, 'Password'),
     el('div', { class: 'password-field' }, password, toggle),
     registering ? el('p', { class: 'field-help', id: 'password-help' }, 'Use 8 to 128 characters.') : null,
     registering ? divisionSlot : null,
   ], registering ? 'Create account' : 'Sign in', region, async (data) => {
+    if (registering && !data.has('division_id')) throw new Error('Choose your division.')
     const result = await api('/auth/' + mode, { method: 'POST', body: Object.fromEntries(data) })
-    if (registering) auth('login', 'Account created. You can now sign in.', true)
-    else { session = result; signedIn() }
+    if (registering) {
+      location.replace('/?' + new URLSearchParams({ next: destination, registered: '1' }))
+    } else {
+      sessionStorage.setItem(tokenKey, result.token)
+      location.replace(destination)
+    }
   })
-  content.replaceChildren(el('div', { class: 'auth-modes', role: 'group', 'aria-label': 'Account action' },
-    button('Sign in', () => { if (!form.hasAttribute('aria-busy') && registering) auth('login', '', true) }, { 'aria-pressed': String(!registering) }),
-    button('Create account', () => { if (!form.hasAttribute('aria-busy') && !registering) auth('register', '', true) }, { 'aria-pressed': String(registering) })),
-  heading, el('p', { class: 'account-description' }, registering
-    ? 'Choose a division for your account.' : 'Enter your email and password to sign in.'), region, form)
+  content.replaceChildren(el('p', { class: 'account-description' }, registering
+    ? 'Choose a division for your account.' : 'Enter your email and password to sign in.'), region, form,
+  el('p', { class: 'auth-page-link' }, registering ? 'Already have an account? ' : 'Need an account? ',
+    el('a', { href: (registering ? '/' : '/register.html') + '?' + new URLSearchParams({ next: destination }) },
+      registering ? 'Sign in' : 'Create an account')))
   if (registering) loadDivisions()
-  if (focus) heading.focus()
 }
 
-function signedIn() {
-  panel.classList.add('signed-in')
-  intro.textContent = 'Manage documents in your division workspace.'
-  const heading = el('h2', { id: 'auth-heading', tabindex: -1 }, 'Your workspace')
+async function protectedPage() {
+  const token = sessionStorage.getItem(tokenKey)
+  const destination = location.pathname + location.search
+  if (!token) {
+    location.replace(signInUrl(destination))
+    return
+  }
+
+  const root = document.querySelector('#workspace-content')
+  root.replaceChildren(el('p', { role: 'status' }, 'Loading…'))
+  const session = { token }
+  try {
+    const { user } = await api('/auth/me', { session })
+    session.user = user
+  } catch (error) {
+    if (error.status !== 401) {
+      feedback(root, error.message, true)
+      root.append(button('Retry', protectedPage))
+    }
+    return
+  }
+
   const region = el('div')
   const signOut = button('Sign out', async () => {
     signOut.disabled = true
@@ -106,17 +140,39 @@ function signedIn() {
     } finally {
       signOut.disabled = false
     }
-    session = null
-    auth('login', 'You signed out.', true)
+    sessionStorage.removeItem(tokenKey)
+    location.replace('/?signed-out=1')
   })
-  const account = el('div', { class: 'workspace-account' },
-    el('div', {}, el('strong', {}, session.user.email), el('p', {}, session.user.division)), signOut)
-  const outlet = el('div')
-  content.replaceChildren(heading, el('p', { class: 'account-description' }, 'You are signed in to TRIAD AI.'), region, account, outlet)
-  cleanup = workspace(outlet, session)
-  heading.focus()
+  document.querySelector('#workspace-account').replaceChildren(
+    el('div', { class: 'workspace-account' },
+      el('div', {}, el('strong', {}, session.user.email), el('p', {}, session.user.division)), signOut), region)
+  workspace(page, root, session, query)
 }
 
-refresh.addEventListener('click', health)
-health()
-auth()
+function start() {
+  window.addEventListener('triad:expired', () => {
+    sessionStorage.removeItem(tokenKey)
+    location.replace(signInUrl(location.pathname + location.search))
+  })
+  if (page === 'status') {
+    document.querySelector('#check-status').addEventListener('click', health)
+    health()
+    return
+  }
+  if (page === 'login' || page === 'register') {
+    const oldPath = location.hash.slice(1)
+    const oldDoc = /^documents\/([a-f0-9]{24})$/i.exec(oldPath)
+    if (oldDoc || Object.hasOwn(pagePaths, oldPath)) {
+      location.replace(oldDoc ? documentUrl(oldDoc[1]) : pagePaths[oldPath])
+    } else if (sessionStorage.getItem(tokenKey)) {
+      location.replace(safeDestination(query.get('next')))
+    } else {
+      auth()
+    }
+    return
+  }
+  window.addEventListener('pageshow', (event) => { if (event.persisted) location.reload() })
+  protectedPage()
+}
+
+start()

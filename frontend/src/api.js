@@ -16,6 +16,9 @@ export async function api(path, { session, method = 'GET', body, binary = false,
     throw new Error('Could not reach the server. Try again.')
   }
   if (response.status === 204) return null
+  if (response.status === 401 && session && path !== '/auth/logout') {
+    window.dispatchEvent(new Event('triad:expired'))
+  }
   if (binary && response.ok) return response.blob()
   const result = await response.json().catch(() => null)
   if (!response.ok || !result) {

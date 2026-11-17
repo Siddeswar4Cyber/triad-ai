@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>System status | TRIAD AI</title>
+  <link rel="stylesheet" href="/src/styles.css">
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body data-page="status">
+  <a class="skip-link" href="#page-title">Skip to content</a>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>TRIAD AI</div>
+    <nav aria-label="Main navigation">
+      <a href="/documents.html">Documents</a>
+      <a href="/status.html">System status</a>
+    </nav>
+  </header>
+  <main class="page-shell">
+    <h1 id="page-title" tabindex="-1">System status</h1>
+    <section class="status-panel standalone-status" aria-label="Service availability">
+      <div class="status-heading"><h2>Services</h2><button id="check-status" class="quiet-button" type="button">Check again</button></div>
+      <dl class="services" aria-live="polite" aria-atomic="true">
+        <div><dt>Flask API</dt><dd id="api-status">Checking</dd></div>
+        <div><dt>MongoDB</dt><dd id="db-status">Checking</dd></div>
+      </dl>
+    </section>
+  </main>
+</body>
+</html>

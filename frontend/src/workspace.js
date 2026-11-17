@@ -9,7 +9,7 @@ function heading(title) {
 }
 
 function documentLink(docId, title) {
-  return el('a', { href: '#documents/' + docId }, title)
+  return el('a', { href: documentUrl(docId) }, title)
 }
 
 function paging({ page, has_more }, load) {
@@ -215,51 +215,48 @@ function inbox(root, session, signal) {
   return load()
 }
 
-export function workspace(outlet, session) {
-  const routes = {
-    documents: ['Documents', 'Document Hub', hub],
-    upload: ['Upload', 'Upload document', upload],
-    requests: ['Requests', 'Access requests', inbox],
-    search: ['Search', 'Advanced search', search],
-  }
-  if (session.user.role === 'admin') routes.settings = ['Settings', 'Metadata settings',
-    (root, account, signal) => settings(account, root, signal)]
+export const pagePaths = {
+  documents: '/documents.html',
+  document: '/document.html',
+  upload: '/upload.html',
+  requests: '/requests.html',
+  search: '/search.html',
+  settings: '/settings.html',
+}
 
-  const nav = el('nav', { class: 'workspace-nav', 'aria-label': 'Workspace' },
-    Object.entries(routes).map(([key, [name]]) => el('a', { href: '#' + key }, name)))
-  const body = el('div')
-  outlet.replaceChildren(nav, body)
-  let controller
-  let currentView
-  async function render() {
-    const hash = location.hash.slice(1)
-    const match = /^documents\/([a-f0-9]{24})$/i.exec(hash)
-    // Account and system-status anchors scroll without discarding the current view.
-    if (currentView && ['account', 'system-status'].includes(hash)) return
-    const view = match ? 'details' : Object.hasOwn(routes, hash) ? hash : 'documents'
-    currentView = view
-    controller?.abort()
-    controller = new AbortController()
-    const { signal } = controller
-    for (const link of nav.children) {
-      if (link.hash === '#' + (match ? 'documents' : view)) link.setAttribute('aria-current', 'page')
-      else link.removeAttribute('aria-current')
-    }
-    const area = el('section', { class: 'work-section' })
-    body.replaceChildren(area)
-    try {
-      if (match) await showDetails(area, session, match[1], signal)
-      else {
-        const [, title, draw] = routes[view]
-        const body = el('div')
-        area.append(heading(title), body)
-        await draw(body, session, signal)
-      }
-    } catch (error) {
-      if (!signal.aborted) feedback(area, error.message, true)
-    }
+export function documentUrl(id) {
+  return pagePaths.document + '?' + new URLSearchParams({ id })
+}
+
+export async function workspace(page, root, session, query) {
+  const routes = {
+    documents: ['Documents', hub],
+    upload: ['Upload', upload],
+    requests: ['Requests', inbox],
+    search: ['Search', search],
   }
-  window.addEventListener('hashchange', render)
-  render()
-  return () => { controller?.abort(); window.removeEventListener('hashchange', render) }
+  if (session.user.role === 'admin') routes.settings = ['Settings',
+    (content, account, signal) => settings(account, content, signal)]
+
+  document.querySelector('#workspace-nav').replaceChildren(...Object.entries(routes).map(([key, [name]]) =>
+    el('a', { href: pagePaths[key], 'aria-current': page === key || (page === 'document' && key === 'documents')
+      ? 'page' : null }, name)))
+
+  const controller = new AbortController()
+  window.addEventListener('pagehide', () => controller.abort(), { once: true })
+  const { signal } = controller
+  root.replaceChildren()
+  try {
+    if (page === 'document') {
+      const id = query.get('id')
+      if (!/^[a-f0-9]{24}$/i.test(id || '')) throw new Error('This document link is invalid.')
+      await showDetails(root, session, id, signal)
+    } else if (Object.hasOwn(routes, page)) {
+      await routes[page][1](root, session, signal)
+    } else {
+      throw new Error('Metadata settings require an administrator.')
+    }
+  } catch (error) {
+    if (!signal.aborted) feedback(root, error.message, true)
+  }
 }

@@ -61,7 +61,6 @@ services:
     ports:
       - "127.0.0.1:5174:80"
     volumes:
-      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
       - ./frontend/src:/usr/share/nginx/html/src:ro
 
 volumes:

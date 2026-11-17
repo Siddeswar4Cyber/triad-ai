@@ -3,41 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TRIAD AI Document Management</title>
+  <title>Sign in | TRIAD AI</title>
   <link rel="stylesheet" href="/src/styles.css">
   <script type="module" src="/src/main.js"></script>
 </head>
-<body>
-  <a class="skip-link" href="#account">Skip to account</a>
+<body data-page="login">
+  <a class="skip-link" href="#page-title">Skip to content</a>
   <header class="topbar">
     <div class="brand"><span class="brand-mark" aria-hidden="true"></span>TRIAD AI</div>
     <nav aria-label="Main navigation">
-      <a href="#account">Account</a>
-      <a href="#system-status">System status</a>
+      <a href="/documents.html">Documents</a>
+      <a href="/status.html">System status</a>
     </nav>
   </header>
   <main class="workspace">
     <div class="intro">
       <h1>Document<br> Management</h1>
-      <p id="workspace-intro">Sign in to your division workspace.</p>
+      <p>Manage documents in your division workspace.</p>
       <div class="document-art" aria-hidden="true">
         <span class="orbit orbit-outer"></span><span class="orbit orbit-inner"></span>
         <span class="orbit-point"></span><span class="paper paper-back"></span>
         <span class="paper paper-front"><i></i><i></i><i></i></span>
       </div>
-      <section id="system-status" class="status-panel" aria-labelledby="status-heading" tabindex="-1">
-        <div class="status-heading">
-          <h2 id="status-heading">System status</h2>
-          <button id="check-status" class="quiet-button" type="button">Check again</button>
-        </div>
-        <dl class="services" aria-live="polite" aria-atomic="true">
-          <div><dt>Flask API</dt><dd id="api-status">Checking</dd></div>
-          <div><dt>MongoDB</dt><dd id="db-status">Checking</dd></div>
-        </dl>
-      </section>
     </div>
-    <section id="account" class="account-panel" aria-labelledby="auth-heading" tabindex="-1">
-      <div id="account-content" class="account-content"></div>
+    <section class="account-panel" aria-labelledby="page-title">
+      <div class="account-content">
+        <h2 id="page-title" tabindex="-1">Welcome back</h2>
+        <div id="auth-content"></div>
+      </div>
     </section>
   </main>
   <noscript>Enable JavaScript to use the document workspace.</noscript>
