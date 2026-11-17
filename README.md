@@ -1,6 +1,6 @@
 # TRIAD AI Document Management System
 
-A local document workspace built with React, Flask, MongoDB/GridFS, and a background OCR worker. It supports division-based access, configurable metadata, cross-division requests, and search.
+A local document workspace built with HTML, CSS, JavaScript, Flask, MongoDB/GridFS, and a background OCR worker. It supports division-based access, configurable metadata, cross-division requests, and search.
 
 ## Start locally
 
@@ -60,7 +60,7 @@ Custom metadata labels and option labels can change while stable keys and IDs pr
 ## Verify
 
 ```powershell
-docker compose exec -T frontend npm run build
+docker compose exec -T frontend nginx -t
 docker compose exec -T backend python smoke_auth.py
 docker compose exec -T ocr python smoke_project.py | Tee-Object -FilePath test_report.txt
 ```
@@ -71,7 +71,7 @@ Both smoke scripts create and remove their own temporary MongoDB databases. The 
 
 - If Flask cannot reach MongoDB, check that `mongo` is healthy and that the URI uses the Compose service name. After changing `.env`, run `docker compose up -d` to apply the new environment.
 - Use `docker compose logs --tail=80 backend frontend ocr` for startup and processing errors.
-- Vite proxies `/api` to Flask inside Docker. The direct health endpoint on port 5001 helps distinguish a Flask error from a proxy error.
+- Nginx serves the static frontend and proxies `/api` to Flask inside Docker. The direct health endpoint on port 5001 helps distinguish a Flask error from a proxy error.
 - `docker compose down` preserves the `mongo_data` named volume. Use `down -v` only for a disposable stack whose data you want to erase.
 
-The root `requirements.txt` delegates to the backend manifest. Docker installs the Python and frontend dependencies during image builds. Keep local `.env`, generated test reports, and document data out of Git.
+The root `requirements.txt` delegates to the backend manifest. Docker installs the Python dependencies during image builds. The static frontend uses browser modules and requires no JavaScript packages or build step. Keep local `.env`, generated test reports, and document data out of Git.

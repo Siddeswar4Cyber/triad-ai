@@ -1,11 +1,4 @@
-FROM node:22-bookworm-slim
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY index.html vite.config.js ./
-COPY src ./src
-
-CMD ["npm", "run", "dev"]
+FROM nginx:stable-alpine
+COPY default.conf /etc/nginx/conf.d/default.conf
+COPY index.html /usr/share/nginx/html/index.html
+COPY src /usr/share/nginx/html/src

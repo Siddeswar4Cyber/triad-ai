@@ -59,11 +59,10 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "127.0.0.1:5174:5173"
+      - "127.0.0.1:5174:80"
     volumes:
-      - ./frontend/index.html:/app/index.html:ro
-      - ./frontend/vite.config.js:/app/vite.config.js:ro
-      - ./frontend/src:/app/src:ro
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+      - ./frontend/src:/usr/share/nginx/html/src:ro
 
 volumes:
   mongo_data:

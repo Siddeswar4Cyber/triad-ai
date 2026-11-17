@@ -1,12 +1,27 @@
-export async function api(session, path, { method = 'GET', body, signal, binary = false } = {}) {
-  const headers = { Authorization: `Bearer ${session.token}` }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
-  const response = await fetch('/api' + path, {
-    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
-  })
+export async function api(path, { session, method = 'GET', body, binary = false, signal } = {}) {
+  const multipart = body instanceof FormData
+  const headers = {}
+  if (session) headers.Authorization = 'Bearer ' + session.token
+  if (body !== undefined && !multipart) headers['Content-Type'] = 'application/json'
+
+  const timeout = AbortSignal.timeout(binary || multipart ? 30000 : 15000)
+  let response
+  try {
+    response = await fetch('/api' + path, {
+      method, headers, cache: 'no-store',
+      body: multipart || body === undefined ? body : JSON.stringify(body),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    })
+  } catch {
+    throw new Error('Could not reach the server. Try again.')
+  }
+  if (response.status === 204) return null
   if (binary && response.ok) return response.blob()
   const result = await response.json().catch(() => null)
-  if (!response.ok || !result) throw new Error(result?.error || 'The service could not complete the request.')
+  if (!response.ok || !result) {
+    const error = new Error(result?.error || 'The service could not complete the request.')
+    error.status = response.status
+    throw error
+  }
   return result
 }
