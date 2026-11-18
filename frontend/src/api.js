@@ -8,7 +8,9 @@ export async function api(path, { session, method = 'GET', body, binary = false,
   let response
   try {
     response = await fetch('/api' + path, {
-      method, headers, cache: 'no-store',
+      method,
+      headers,
+      cache: 'no-store',
       body: multipart || body === undefined ? body : JSON.stringify(body),
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
@@ -19,7 +21,7 @@ export async function api(path, { session, method = 'GET', body, binary = false,
   if (response.status === 401 && session && path !== '/auth/logout') {
     window.dispatchEvent(new Event('triad:expired'))
   }
-  if (binary && response.ok) return response.blob()
+  if (binary && response.ok) return binary === 'response' ? response : response.blob()
   const result = await response.json().catch(() => null)
   if (!response.ok || !result) {
     const error = new Error(result?.error || 'The service could not complete the request.')

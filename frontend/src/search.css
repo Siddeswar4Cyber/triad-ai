@@ -1,0 +1,121 @@
+.search-shell {
+  background: transparent;
+  border: 0;
+  padding: 0 0 1rem;
+}
+.search-shell #workspace-account {
+  margin-bottom: 0.85rem;
+}
+.search-shell .workspace-nav {
+  margin-top: 0;
+}
+
+.search-banner {
+  padding: clamp(1.25rem, 3vw, 2.15rem);
+  border-radius: 1rem;
+  background: var(--ink);
+  color: #f6faef;
+}
+.search-banner-heading,
+.search-results-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.search-banner h2 {
+  font-size: clamp(1.45rem, 3vw, 2.15rem);
+  letter-spacing: -0.035em;
+}
+.search-banner p {
+  margin-top: 0.45rem;
+  color: #c5d5c9;
+  line-height: 1.5;
+}
+.search-division {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid #8ca28f;
+  border-radius: 0.5rem;
+  color: #e6f1df;
+  font-weight: 650;
+  font-size: 0.85rem;
+}
+.search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 13rem) auto;
+  align-items: end;
+  gap: 0.8rem;
+  margin-top: 1.25rem;
+}
+.search-form label {
+  font-size: 0.87rem;
+  font-weight: 680;
+}
+.search-form .primary-button {
+  margin: 0;
+  padding-inline: 1.25rem;
+  background: var(--lime);
+  color: var(--ink);
+}
+.search-form .primary-button:hover {
+  background: #e5f6b3;
+}
+.search-form :focus-visible {
+  outline-color: var(--lime);
+}
+.search-results {
+  margin-top: 1rem;
+  padding: clamp(1rem, 2.3vw, 1.75rem);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.search-results-heading {
+  margin-bottom: 1rem;
+}
+.search-results-heading h2 {
+  font-size: 1.15rem;
+}
+.search-results-heading p {
+  margin-top: 0.35rem;
+}
+.search-empty {
+  padding: 1.6rem 0.85rem;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: 0.65rem;
+}
+.search-empty h3 {
+  margin: 0 0 0.4rem;
+}
+.search-empty p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.search-pagination {
+  margin-top: 0.75rem;
+  align-items: center;
+}
+.search-pagination a {
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+}
+
+@media (max-width: 680px) {
+  .search-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .search-form > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 420px) {
+  .search-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .search-shell .search-form .primary-button {
+    width: 100%;
+  }
+}

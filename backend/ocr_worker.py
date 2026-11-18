@@ -22,32 +22,51 @@ MAX_TEXT = 400_000
 
 
 def backfill(db):
-    result = db.documents.update_many({"ocr_status": {"$exists": False}}, {
-        "$set": {"ocr_status": "pending", "ocr_attempts": 0},
-    })
+    result = db.documents.update_many(
+        {"ocr_status": {"$exists": False}},
+        {
+            "$set": {"ocr_status": "pending", "ocr_attempts": 0},
+        },
+    )
     return result.modified_count
 
 
 def claim(db):
     now = datetime.now(timezone.utc)
     db.documents.update_many(
-        {"ocr_status": "processing", "ocr_lease_until": {"$lte": now}, "ocr_attempts": {"$gte": MAX_ATTEMPTS}},
-        {"$set": {"ocr_status": "failed", "ocr_error": "OCR ran out of retry attempts."},
-         "$unset": {"ocr_lease": "", "ocr_lease_until": ""}},
+        {
+            "ocr_status": "processing",
+            "ocr_lease_until": {"$lte": now},
+            "ocr_attempts": {"$gte": MAX_ATTEMPTS},
+        },
+        {
+            "$set": {"ocr_status": "failed", "ocr_error": "OCR ran out of retry attempts."},
+            "$unset": {"ocr_lease": "", "ocr_lease_until": ""},
+        },
     )
     return db.documents.find_one_and_update(
-        {"ocr_attempts": {"$lt": MAX_ATTEMPTS}, "$or": [
-            {"ocr_status": "pending"},
-            {"ocr_status": "processing", "ocr_lease_until": {"$lte": now}},
-        ]},
-        {"$set": {"ocr_status": "processing", "ocr_lease": uuid4().hex,
-                  "ocr_lease_until": now + timedelta(seconds=LEASE_SECONDS)},
-         "$inc": {"ocr_attempts": 1}},
-        sort=[("created_at", 1), ("_id", 1)], return_document=ReturnDocument.AFTER,
+        {
+            "ocr_attempts": {"$lt": MAX_ATTEMPTS},
+            "$or": [
+                {"ocr_status": "pending"},
+                {"ocr_status": "processing", "ocr_lease_until": {"$lte": now}},
+            ],
+        },
+        {
+            "$set": {
+                "ocr_status": "processing",
+                "ocr_lease": uuid4().hex,
+                "ocr_lease_until": now + timedelta(seconds=LEASE_SECONDS),
+            },
+            "$inc": {"ocr_attempts": 1},
+        },
+        sort=[("created_at", 1), ("_id", 1)],
+        return_document=ReturnDocument.AFTER,
     )
 
 
 def finish(db, row, values):
+    # A reclaimed job gets a new lease, preventing an old worker from overwriting it.
     db.documents.update_one(
         {"_id": row["_id"], "ocr_status": "processing", "ocr_lease": row["ocr_lease"]},
         {"$set": values, "$unset": {"ocr_lease": "", "ocr_lease_until": ""}},
@@ -56,8 +75,10 @@ def finish(db, row, values):
 
 def ocr_image(path):
     result = subprocess.run(
-        ["tesseract", str(path), "stdout", "-l", "eng"], capture_output=True,
-        check=True, timeout=20,
+        ["tesseract", str(path), "stdout", "-l", "eng"],
+        capture_output=True,
+        check=True,
+        timeout=20,
     )
     return result.stdout.decode("utf-8", errors="replace").strip()
 
@@ -73,10 +94,25 @@ def extract(source, content_type):
             for number, page in enumerate(pdf.pages, 1):
                 text = (page.extract_text() or "").strip()
                 if not text:
-                    subprocess.run([
-                        "pdftoppm", "-f", str(number), "-l", str(number), "-scale-to", "2000",
-                        "-png", "-singlefile", str(source), str(page_image.with_suffix("")),
-                    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=15)
+                    subprocess.run(
+                        [
+                            "pdftoppm",
+                            "-f",
+                            str(number),
+                            "-l",
+                            str(number),
+                            "-scale-to",
+                            "2000",
+                            "-png",
+                            "-singlefile",
+                            str(source),
+                            str(page_image.with_suffix("")),
+                        ],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=True,
+                        timeout=15,
+                    )
                     text = ocr_image(page_image)
                 snippets.append(text[:remaining])
                 remaining -= len(snippets[-1]) + 1
@@ -104,11 +140,16 @@ def process(db, row):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory, "original")
             output = source.with_name("text.txt")
-            with GridFSBucket(db).open_download_stream(row["gridfs_file_id"]) as stream, source.open("wb") as file:
+            with (
+                GridFSBucket(db).open_download_stream(row["gridfs_file_id"]) as stream,
+                source.open("wb") as file,
+            ):
                 shutil.copyfileobj(stream, file, length=256 * 1024)
             with subprocess.Popen(
                 [sys.executable, __file__, "extract", str(source), row["content_type"], str(output)],
-                start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             ) as child:
                 try:
                     code = child.wait(timeout=JOB_SECONDS)
@@ -121,13 +162,26 @@ def process(db, row):
             if code == 75:
                 raise subprocess.TimeoutExpired("OCR page", 20)
             if code != 0:
-                finish(db, row, {"ocr_status": "failed", "ocr_error": "This file could not be processed within OCR limits."})
+                finish(
+                    db,
+                    row,
+                    {
+                        "ocr_status": "failed",
+                        "ocr_error": "This file could not be processed within OCR limits.",
+                    },
+                )
                 return
             text = " ".join(output.read_text(encoding="utf-8").split())
     except (subprocess.TimeoutExpired, OSError, PyMongoError) as error:
         exhausted = row["ocr_attempts"] >= MAX_ATTEMPTS
-        finish(db, row, {"ocr_status": "failed" if exhausted else "pending",
-                         "ocr_error": "OCR timed out or storage was unavailable." if exhausted else None})
+        finish(
+            db,
+            row,
+            {
+                "ocr_status": "failed" if exhausted else "pending",
+                "ocr_error": "OCR timed out or storage was unavailable." if exhausted else None,
+            },
+        )
         print(f"OCR attempt failed for {row['_id']}: {type(error).__name__}", flush=True)
         return
     finish(db, row, {"ocr_status": "ready", "ocr_text": text, "ocr_error": None})

@@ -6,14 +6,7 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mongosh",
-          "--quiet",
-          "--eval",
-          "quit(db.adminCommand({ ping: 1 }).ok === 1 ? 0 : 1)"
-        ]
+      test: ['CMD', 'mongosh', '--quiet', '--eval', 'quit(db.adminCommand({ ping: 1 }).ok === 1 ? 0 : 1)']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,17 +20,19 @@ services:
       mongo:
         condition: service_healthy
     environment:
-      MONGODB_URI: "${MONGODB_URI:-mongodb://mongo:27017}"
-      MONGODB_DATABASE: "${MONGODB_DATABASE:-triad_dms}"
+      MONGODB_URI: '${MONGODB_URI:-mongodb://mongo:27017}'
+      MONGODB_DATABASE: '${MONGODB_DATABASE:-triad_dms}'
     ports:
-      - "127.0.0.1:5001:5000"
+      - '127.0.0.1:5001:5000'
     volumes:
       - ./backend/app.py:/app/app.py:ro
       - ./backend/auth.py:/app/auth.py:ro
+      - ./backend/admin.py:/app/admin.py:ro
+      - ./backend/activity_log.py:/app/activity_log.py:ro
+      - ./backend/divisions.py:/app/divisions.py:ro
       - ./backend/documents.py:/app/documents.py:ro
       - ./backend/metadata_fields.py:/app/metadata_fields.py:ro
       - ./backend/access_requests.py:/app/access_requests.py:ro
-
       - ./backend/ocr_worker.py:/app/ocr_worker.py:ro
       - ./backend/search_documents.py:/app/search_documents.py:ro
 
@@ -53,13 +48,13 @@ services:
       mongo:
         condition: service_healthy
     environment:
-      MONGODB_URI: "${MONGODB_URI:-mongodb://mongo:27017}"
-      MONGODB_DATABASE: "${MONGODB_DATABASE:-triad_dms}"
+      MONGODB_URI: '${MONGODB_URI:-mongodb://mongo:27017}'
+      MONGODB_DATABASE: '${MONGODB_DATABASE:-triad_dms}'
 
   frontend:
     build: ./frontend
     ports:
-      - "127.0.0.1:5174:80"
+      - '${FRONTEND_BIND_ADDRESS:-0.0.0.0}:5174:80'
     volumes:
       - ./frontend/src:/usr/share/nginx/html/src:ro
 

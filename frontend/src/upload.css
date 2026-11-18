@@ -1,0 +1,126 @@
+.upload-shell {
+  background: transparent;
+  border: 0;
+  padding: 0 0 1rem;
+}
+.upload-shell #workspace-account {
+  margin-bottom: 0.85rem;
+}
+.upload-shell .workspace-nav {
+  margin-top: 0;
+}
+.upload-form > fieldset {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.upload-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--paper);
+  padding: clamp(1rem, 2.3vw, 2rem);
+}
+.upload-card h2 {
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+}
+.upload-card > .field-help {
+  margin-top: 0.75rem;
+  line-height: 1.5;
+}
+.upload-drop {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.42rem;
+  min-height: 190px;
+  padding: 1.5rem 0.75rem;
+  background: #f4f6ed;
+  border: 2px dashed #a9b8a9;
+  border-radius: 0.8rem;
+  text-align: center;
+  cursor: pointer;
+}
+.upload-drop:hover,
+.upload-drop.is-dragging {
+  background: #e9f4df;
+  border-color: #397354;
+}
+.upload-drop:focus-within {
+  outline: 3px solid #2f7751;
+  outline-offset: 3px;
+}
+.upload-drop-icon {
+  display: grid;
+  place-items: center;
+  min-width: 2.8rem;
+  min-height: 2.8rem;
+  margin-bottom: 0.3rem;
+  border-radius: 0.7rem;
+  background: var(--lime);
+  color: var(--ink);
+  font-size: 1.55rem;
+}
+.upload-drop strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+.upload-drop-hint {
+  color: var(--muted);
+  font-weight: 400;
+}
+.upload-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 0;
+  clip-path: inset(50%);
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}
+.upload-selected-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  background: #edf4e7;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  overflow-wrap: anywhere;
+}
+.upload-selected-file div {
+  min-width: 0;
+}
+.upload-selected-file .field-help {
+  margin-top: 0.25rem;
+}
+.upload-metadata-fields {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+.upload-result {
+  max-width: 46rem;
+}
+.upload-result a {
+  color: var(--ink);
+  font-weight: 700;
+  text-underline-offset: 0.2em;
+}
+
+@media (max-width: 760px) {
+  .upload-form > fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 480px) {
+  .upload-shell .upload-form .primary-button {
+    width: 100%;
+  }
+}

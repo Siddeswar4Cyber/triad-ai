@@ -1,18 +1,20 @@
 from datetime import datetime, timezone
 
+from activity_log import init_activity_indexes
+from auth import get_database, read_json_object, read_page, require_user
 from bson import ObjectId
+from divisions import division_name
+from documents import find_document
 from flask import Blueprint, g, jsonify, request
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError, PyMongoError
-
-from auth import DIVISIONS, get_database, read_json_object, require_user
-from documents import find_document
 
 access = Blueprint("access", __name__, url_prefix="/api/access")
 
 
 def init_access_indexes():
     db = get_database()
+    init_activity_indexes(db)
     db.access_requests.create_index([("document_id", 1), ("requester_id", 1)], unique=True)
     db.access_requests.create_index([("owner_division_id", 1), ("created_at", -1), ("_id", -1)])
     db.access_requests.create_index([("requester_id", 1), ("created_at", -1), ("_id", -1)])
@@ -21,10 +23,14 @@ def init_access_indexes():
 
 def summary(row):
     return {
-        "request_id": str(row["_id"]), "doc_id": str(row["document_id"]),
-        "status": row["status"], "division": DIVISIONS[row["owner_division_id"]],
+        "request_id": str(row["_id"]),
+        "doc_id": str(row["document_id"]),
+        "status": row["status"],
+        "division": division_name(get_database(), row["owner_division_id"]),
         "created_at": row["created_at"].replace(tzinfo=timezone.utc).isoformat(timespec="milliseconds"),
-        "decided_at": row["decided_at"].replace(tzinfo=timezone.utc).isoformat(timespec="milliseconds") if row.get("decided_at") else None,
+        "decided_at": row["decided_at"].replace(tzinfo=timezone.utc).isoformat(timespec="milliseconds")
+        if row.get("decided_at")
+        else None,
     }
 
 
@@ -45,8 +51,12 @@ def request_access():
 
     collection = get_database().access_requests
     identity = {"document_id": row["_id"], "requester_id": g.user["_id"]}
-    record = {**identity, "owner_division_id": row["owner_division_id"],
-              "status": "pending", "created_at": datetime.now(timezone.utc)}
+    record = {
+        **identity,
+        "owner_division_id": row["owner_division_id"],
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc),
+    }
     try:
         collection.insert_one(record)
     except DuplicateKeyError:
@@ -60,7 +70,9 @@ def decide(status):
     if not isinstance(request_id, str) or not ObjectId.is_valid(request_id):
         return jsonify(error="A valid request ID is required."), 400
     collection = get_database().access_requests
-    identity = {"_id": ObjectId(request_id), "owner_division_id": g.user["division_id"]}
+    identity = {"_id": ObjectId(request_id)}
+    if g.user["role"] != "admin":
+        identity["owner_division_id"] = g.user["division_id"]
     row = collection.find_one_and_update(
         {**identity, "status": "pending"},
         {"$set": {"status": status, "decided_by": g.user["_id"], "decided_at": datetime.now(timezone.utc)}},
@@ -91,25 +103,41 @@ def list_requests():
     direction = request.args.get("direction", "incoming")
     if direction not in ("incoming", "outgoing"):
         return jsonify(error="Choose incoming or outgoing requests."), 400
+    identity = (
+        {"owner_division_id": g.user["division_id"]}
+        if direction == "incoming"
+        else {"requester_id": g.user["_id"]}
+    )
+    return request_page(identity, direction)
+
+
+def request_page(identity, direction):
     try:
-        page = int(request.args.get("page", "1"))
-        if not 1 <= page <= 10000:
-            raise ValueError()
+        page = read_page()
     except ValueError:
         return jsonify(error="Page must be between 1 and 10000."), 400
 
     db = get_database()
-    identity = {"owner_division_id": g.user["division_id"]} if direction == "incoming" else {"requester_id": g.user["_id"]}
-    rows = list(db.access_requests.find(identity)
-                .sort([("created_at", -1), ("_id", -1)]).skip((page - 1) * 20).limit(21))
+    status = request.args.get("status", "")
+    if status and status not in ("pending", "approved", "rejected"):
+        return jsonify(error="Choose pending, approved, or rejected requests."), 400
+    query = {**identity, "status": status} if status else identity
+    rows = list(
+        db.access_requests.find(query).sort([("created_at", -1), ("_id", -1)]).skip((page - 1) * 20).limit(21)
+    )
     entries = []
     for row in rows[:20]:
         entry = summary(row)
+        if direction == "incoming" or row["status"] == "approved":
+            document = db.documents.find_one(
+                {"_id": row["document_id"], "owner_division_id": row["owner_division_id"]}, {"title": 1}
+            )
+            if document:
+                entry["title"] = document["title"]
         if direction == "incoming":
             requester = db.users.find_one({"_id": row["requester_id"]}, {"email": 1, "division_id": 1})
-            document = db.documents.find_one({"_id": row["document_id"], **identity}, {"title": 1})
             entry["requester"] = requester["email"] if requester else "Unavailable account"
-            entry["requester_division"] = DIVISIONS[requester["division_id"]] if requester else None
+            entry["requester_division"] = division_name(db, requester["division_id"]) if requester else None
             entry["title"] = document["title"] if document else "Unavailable document"
         entries.append(entry)
     return jsonify(requests=entries, has_more=len(rows) > 20, page=page)

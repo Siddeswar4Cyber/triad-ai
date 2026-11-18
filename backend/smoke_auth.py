@@ -1,12 +1,12 @@
 """Run the auth smoke test against an isolated database on the Compose MongoDB."""
+
 import os
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from werkzeug.security import check_password_hash
-
 from app import create_app
 from auth import token_digest
+from werkzeug.security import check_password_hash
 
 
 def expect_status(response, status):
@@ -46,8 +46,8 @@ def run():
             email = f"{division}@example.test"
             credentials = {"email": email, "password": password, "division_id": division}
             expect_status(register(**{**credentials, "division_id": "invalid"}), 400)
-            expect_status(register(**{**credentials, "password": password + chr(0xd800)}), 400)
-            expect_status(register(**{**credentials, "email": chr(0xd800) + email}), 400)
+            expect_status(register(**{**credentials, "password": password + chr(0xD800)}), 400)
+            expect_status(register(**{**credentials, "email": chr(0xD800) + email}), 400)
 
             user = expect_status(register(**credentials, role="admin"), 201)["user"]
             assert user["role"] == "user" and user["division_id"] == division
@@ -57,7 +57,7 @@ def run():
             assert check_password_hash(stored["password_hash"], password)
             expect_status(register(**{**credentials, "email": email.upper()}), 409)
             expect_status(login(email, "WrongPassword-42"), 401)
-            expect_status(login(email, password + chr(0xd800)), 401)
+            expect_status(login(email, password + chr(0xD800)), 401)
 
             token = expect_status(login(email, password), 200)["token"]
             headers = {"Authorization": f"Bearer {token}"}
@@ -72,9 +72,15 @@ def run():
                 {"$set": {"expires_at": datetime.now(timezone.utc) - timedelta(seconds=1)}},
             )
             assert result.modified_count == 1
-            expect_status(client.get("/api/auth/me", headers={
-                "Authorization": f"Bearer {expired_token}",
-            }), 401)
+            expect_status(
+                client.get(
+                    "/api/auth/me",
+                    headers={
+                        "Authorization": f"Bearer {expired_token}",
+                    },
+                ),
+                401,
+            )
     finally:
         db.client.drop_database(db.name)
         db.client.close()

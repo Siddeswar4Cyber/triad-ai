@@ -1,29 +1,38 @@
 import json
 import math
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime, timezone
-from pathlib import PurePosixPath
+from io import BytesIO
+from pathlib import Path, PurePosixPath
 
+from auth import get_database, read_json_object, read_page, require_admin, require_user
 from bson import ObjectId
+from divisions import division_name
 from flask import Blueprint, Response, current_app, g, jsonify, request
 from gridfs import GridFSBucket
 from gridfs.errors import NoFile
-from PIL import Image
+from metadata_fields import (
+    definitions,
+    display_values,
+    field_names,
+    option_for,
+    validate_values,
+)
+from PIL import Image, ImageOps
 from pymongo.errors import PyMongoError
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
-from auth import DIVISIONS, get_database, require_user
-from metadata_fields import definitions, display_values, names, option_for, validate_values
-
-
 documents = Blueprint("documents", __name__, url_prefix="/api/documents")
 MAX_FILE_BYTES = 10 * 1024 * 1024
 IMAGE_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "TIFF": "image/tiff", "WEBP": "image/webp"}
 
 
-def read_metadata(raw, division_id):
+def read_metadata(raw, division_id, owner_name):
     data = json.loads(raw)
     if not isinstance(data, dict) or len(data) > 50:
         raise ValueError("Metadata must be a JSON object with at most 50 fields.")
@@ -35,7 +44,7 @@ def read_metadata(raw, division_id):
         if not key or len(key) > 80 or any(char in key for char in ".$\0") or key in metadata:
             raise ValueError("Metadata contains an invalid or duplicate field name.")
         if key.casefold() in {"division", "division_id", "owner_division_id"}:
-            if value not in (division_id, DIVISIONS[division_id]):
+            if value not in (division_id, owner_name):
                 raise PermissionError("You can only upload to your own division.")
             continue
         if isinstance(value, str):
@@ -43,7 +52,7 @@ def read_metadata(raw, division_id):
             if len(value) > 500:
                 raise ValueError("Metadata text must be at most 500 characters.")
         elif type(value) is int:
-            if not -(2 ** 63) <= value < 2 ** 63:
+            if not -(2**63) <= value < 2**63:
                 raise ValueError("A metadata number is out of range.")
         elif type(value) is float:
             if not math.isfinite(value):
@@ -89,6 +98,11 @@ def storage_unavailable(error):
 def upload():
     request.max_content_length = MAX_FILE_BYTES + 128 * 1024
     division_id = g.user["division_id"]
+    db = get_database()
+    division = db.divisions.find_one({"_id": division_id, "active": True})
+    if division is None:
+        return jsonify(error="Uploads are disabled for this division."), 403
+    owner_name = division["name"]
 
     if request.mimetype != "multipart/form-data":
         return jsonify(error="Send the file as multipart form data."), 415
@@ -101,10 +115,11 @@ def upload():
     try:
         for carrier in (request.form, request.args):
             for key in ("Division", "division", "division_id", "owner_division_id"):
-                if any(value not in (division_id, DIVISIONS[division_id]) for value in carrier.getlist(key)):
+                if any(value not in (division_id, owner_name) for value in carrier.getlist(key)):
                     raise PermissionError("You can only upload to your own division.")
         metadata = validate_values(
-            read_metadata(request.form.get("metadata", "{}"), division_id), definitions(active_only=True)
+            read_metadata(request.form.get("metadata", "{}"), division_id, owner_name),
+            definitions(active_only=True),
         )
     except PermissionError as error:
         return jsonify(error=str(error)), 403
@@ -123,12 +138,20 @@ def upload():
 
     try:
         content_type = detect_content_type(file.stream)
-    except (PdfReadError, OSError, ValueError, SyntaxError, TypeError, KeyError,
-            OverflowError, RecursionError, Image.DecompressionBombError):
+    except (
+        PdfReadError,
+        OSError,
+        ValueError,
+        SyntaxError,
+        TypeError,
+        KeyError,
+        OverflowError,
+        RecursionError,
+        Image.DecompressionBombError,
+    ):
         return jsonify(error="Choose a readable, unencrypted PDF, PNG, JPEG, TIFF, or WebP."), 415
 
     filename = secure_filename(file.filename)[:255] or "document"
-    db = get_database()
     bucket = GridFSBucket(db)
     file_id = ObjectId()
     record = {
@@ -159,8 +182,12 @@ def upload():
         raise
 
     return jsonify(
-        doc_id=str(file_id), filename=filename, title=record["title"],
-        content_type=content_type, size=size, metadata=metadata,
+        doc_id=str(file_id),
+        filename=filename,
+        title=record["title"],
+        content_type=content_type,
+        size=size,
+        metadata=metadata,
         owner_division_id=division_id,
     ), 201
 
@@ -182,15 +209,22 @@ def access_status(row):
 
 
 def can_read(row):
-    return row["owner_division_id"] == g.user["division_id"] or access_status(row) == "approved"
+    return (
+        g.user["role"] == "admin"
+        or row["owner_division_id"] == g.user["division_id"]
+        or access_status(row) == "approved"
+    )
 
 
 def document_summary(row, fields):
     return {
-        "doc_id": str(row["_id"]), "title": row["title"], "filename": row["filename"],
-        "size": row["size"], "content_type": row["content_type"],
+        "doc_id": str(row["_id"]),
+        "title": row["title"],
+        "filename": row["filename"],
+        "size": row["size"],
+        "content_type": row["content_type"],
         "owner_division_id": row["owner_division_id"],
-        "division": DIVISIONS[row["owner_division_id"]],
+        "division": division_name(get_database(), row["owner_division_id"]),
         "created_at": row["created_at"].replace(tzinfo=timezone.utc).isoformat(),
         "metadata": display_values(row, fields),
         "ocr_status": row.get("ocr_status", "not_queued"),
@@ -202,25 +236,33 @@ def filter_for(field, value):
     option = option_for(field, value) if field["type"] == "select" else None
     current = option["id"] if option else value
     equivalent = list({value, current, option["label"], *option.get("aliases", [])}) if option else [value]
-    return {"$or": [
-        {"metadata_fields." + field["key"]: current},
-        *[{"metadata." + name: {"$in": equivalent}} for name in names(field)],
-    ]}
+    return {
+        "$or": [
+            {"metadata_fields." + field["key"]: current},
+            *[{"metadata." + name: {"$in": equivalent}} for name in field_names(field)],
+        ]
+    }
 
 
 def page_response(query, fields):
     try:
-        page = int(request.args.get("page", "1"))
-        if not 1 <= page <= 10000:
-            raise ValueError()
+        page = read_page()
     except ValueError:
         return jsonify(error="Page must be between 1 and 10000."), 400
 
-    rows = list(get_database().documents.find(query, {"ocr_text": 0}).max_time_ms(2000)
-                .sort([("created_at", -1), ("_id", -1)])
-                .skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE + 1))
-    return jsonify(documents=[document_summary(row, fields) for row in rows[:PAGE_SIZE]],
-                   page=page, has_more=len(rows) > PAGE_SIZE)
+    rows = list(
+        get_database()
+        .documents.find(query, {"ocr_text": 0})
+        .max_time_ms(2000)
+        .sort([("created_at", -1), ("_id", -1)])
+        .skip((page - 1) * PAGE_SIZE)
+        .limit(PAGE_SIZE + 1)
+    )
+    return jsonify(
+        documents=[document_summary(row, fields) for row in rows[:PAGE_SIZE]],
+        page=page,
+        has_more=len(rows) > PAGE_SIZE,
+    )
 
 
 @documents.get("")
@@ -229,13 +271,16 @@ def list_documents():
     division = g.user["division_id"]
     fields = definitions()
     filters = [{"owner_division_id": division}]
-    lookup = {name: field for field in fields for name in names(field)}
+    lookup = {name: field for field in fields for name in field_names(field)}
     for key, value in request.args.items():
         if not value or key == "page":
             continue
         if key.casefold() in {"division", "division_id", "owner_division_id"}:
-            target = next((identifier for identifier, label in DIVISIONS.items()
-                           if value in (identifier, label)), "")
+            divisions = get_database().divisions
+            match = divisions.find_one({"_id": value}, {"_id": 1})
+            if match is None:
+                match = divisions.find_one({"name_key": value.casefold()}, {"_id": 1})
+            target = match["_id"] if match else ""
             filters.append({"owner_division_id": target})
         elif key in lookup and len(value) <= 500:
             filters.append(filter_for(lookup[key], value))
@@ -250,12 +295,69 @@ def document_details(doc_id):
     row = find_document(doc_id)
     if row is None:
         return jsonify(error="Document not found."), 404
-    if row["owner_division_id"] != g.user["division_id"]:
-        status = access_status(row)
-        if status != "approved":
-            return jsonify(document={"doc_id": str(row["_id"]), "division": DIVISIONS[row["owner_division_id"]],
-                                     "can_download": False, "request_status": status})
-    return jsonify(document={**document_summary(row, definitions()), "can_download": True})
+    own_division = row["owner_division_id"] == g.user["division_id"]
+    is_admin = g.user["role"] == "admin"
+    status = None if own_division or is_admin else access_status(row)
+    can_download = is_admin or own_division or status == "approved"
+    if not can_download:
+        return jsonify(
+            document={
+                "doc_id": str(row["_id"]),
+                "division": division_name(get_database(), row["owner_division_id"]),
+                "can_download": False,
+                "request_status": status,
+            }
+        )
+    return jsonify(
+        document={
+            **document_summary(row, definitions()),
+            "can_download": can_download,
+            "request_status": status,
+        }
+    )
+
+
+@documents.get("/<doc_id>/metadata")
+@documents.patch("/<doc_id>/metadata")
+@require_admin
+def document_metadata(doc_id):
+    row = find_document(doc_id)
+    if row is None:
+        return jsonify(error="Document not found."), 404
+    fields = definitions(active_only=True)
+    if request.method == "GET":
+        displayed = display_values(row, fields)
+        values = {}
+        for field in fields:
+            if field["label"] in displayed:
+                value = displayed[field["label"]]
+                option = option_for(field, value)
+                values[field["key"]] = option["id"] if option else value
+        return jsonify(fields=fields, values=values)
+
+    changes = read_json_object().get("metadata")
+    by_key = {field["key"]: field for field in fields}
+    if not isinstance(changes, dict) or not changes or changes.keys() - by_key.keys():
+        return jsonify(error="Provide at least one active metadata field by key."), 400
+    try:
+        for key, value in changes.items():
+            if not isinstance(value, str) or len(value) > 500:
+                return jsonify(error="Metadata values must be text up to 500 characters."), 400
+            changes[key] = value.strip()
+            value.encode("utf-8")
+        values = validate_values(dict(changes), [by_key[key] for key in changes])
+    except (ValueError, UnicodeError) as error:
+        return jsonify(error=str(error)), 400
+
+    updates = {"$unset": {f"metadata.{alias}": "" for key in changes for alias in field_names(by_key[key])}}
+    for key in changes.keys() - values.keys():
+        updates["$unset"][f"metadata_fields.{key}"] = ""
+    if values:
+        updates["$set"] = {f"metadata_fields.{key}": value for key, value in values.items()}
+    result = get_database().documents.update_one({"_id": row["_id"]}, updates)
+    if not result.matched_count:
+        return jsonify(error="Document not found."), 404
+    return "", 204
 
 
 @documents.get("/<doc_id>/download")
@@ -264,6 +366,88 @@ def download_document(doc_id):
     row = find_document(doc_id)
     if row is None or not can_read(row):
         return jsonify(error="Document not found or access unavailable."), 404
+    return stream_document(row, "attachment")
+
+
+@documents.get("/<doc_id>/preview")
+@require_user
+def preview_document(doc_id):
+    row = find_document(doc_id)
+    if row is None or not can_read(row):
+        return jsonify(error="Document not found or access unavailable."), 404
+    if row["content_type"] not in ("image/tiff", "application/pdf"):
+        return stream_document(row, "inline")
+
+    try:
+        frame = int(request.args.get("frame", "0"))
+    except ValueError:
+        frame = -1
+    if frame < 0:
+        return jsonify(error="Invalid preview page."), 400
+    try:
+        with GridFSBucket(get_database()).open_download_stream(row["gridfs_file_id"]) as stream:
+            if row["content_type"] == "application/pdf":
+                contents, has_next = render_pdf_preview(stream, frame)
+            else:
+                contents, has_next = render_tiff_preview(stream, frame)
+    except (NoFile, EOFError):
+        return jsonify(error="The stored file or page is unavailable."), 404
+    except (
+        OSError,
+        ValueError,
+        SyntaxError,
+        PdfReadError,
+        subprocess.SubprocessError,
+        Image.DecompressionBombError,
+    ):
+        return jsonify(
+            error="This page could not be previewed. You can still download the original file."
+        ), 422
+
+    response = Response(contents, mimetype="image/png")
+    response.headers["X-Preview-Has-Next"] = str(has_next).lower()
+    return file_headers(response, PurePosixPath(row["filename"]).stem + ".png", "inline")
+
+
+def render_pdf_preview(stream, frame):
+    with tempfile.TemporaryDirectory() as directory:
+        source = Path(directory) / "original.pdf"
+        with source.open("wb") as file:
+            shutil.copyfileobj(stream, file, length=255 * 1024)
+        with PdfReader(source, strict=True) as pdf:
+            page_count = len(pdf.pages)
+        if frame >= page_count:
+            raise EOFError
+        page = str(frame + 1)
+        rendered = subprocess.run(
+            ["pdftoppm", "-f", page, "-l", page, "-scale-to", "2000", "-png", "-singlefile", str(source)],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=True,
+            timeout=15,
+        )
+        if not rendered.stdout:
+            raise ValueError("Empty PDF preview.")
+        return rendered.stdout, frame + 1 < page_count
+
+
+def render_tiff_preview(stream, frame):
+    with Image.open(stream, formats=["TIFF"]) as image:
+        image.seek(frame)
+        if image.width * image.height > 25_000_000:
+            raise ValueError("TIFF page is too large.")
+        page = ImageOps.exif_transpose(image).convert("RGBA")
+        page.thumbnail((2400, 2400))
+        output = BytesIO()
+        page.save(output, format="PNG")
+        try:
+            image.seek(frame + 1)
+        except EOFError:
+            return output.getvalue(), False
+        return output.getvalue(), True
+
+
+def stream_document(row, disposition):
     try:
         stream = GridFSBucket(get_database()).open_download_stream(row["gridfs_file_id"])
     except NoFile:
@@ -278,8 +462,12 @@ def download_document(doc_id):
 
     response = Response(chunks(), mimetype=row["content_type"])
     response.content_length = stream.length
-    response.headers.set("Content-Disposition", "attachment", filename=row["filename"])
+    response.call_on_close(stream.close)
+    return file_headers(response, row["filename"], disposition)
+
+
+def file_headers(response, filename, disposition):
+    response.headers.set("Content-Disposition", disposition, filename=filename)
     response.headers["Cache-Control"] = "private, no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.call_on_close(stream.close)
     return response

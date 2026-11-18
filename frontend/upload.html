@@ -1,27 +1,24 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Upload document | TRIAD AI</title>
-  <link rel="stylesheet" href="/src/styles.css">
-  <script type="module" src="/src/main.js"></script>
-</head>
-<body data-page="upload">
-  <a class="skip-link" href="#page-title">Skip to content</a>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>TRIAD AI</div>
-    <nav aria-label="Main navigation">
-      <a href="/documents.html">Documents</a>
-      <a href="/status.html">System status</a>
-    </nav>
-  </header>
-  <main class="page-shell">
-    <h1 id="page-title" tabindex="-1">Upload document</h1>
-    <div id="workspace-account"></div>
-    <nav id="workspace-nav" class="workspace-nav" aria-label="Workspace"></nav>
-    <section id="workspace-content" class="work-section" aria-labelledby="page-title"></section>
-  </main>
-  <noscript>Enable JavaScript to use the document workspace.</noscript>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Upload document | TRIAD AI</title>
+    <link rel="stylesheet" href="/src/styles.css?v=cleanup" />
+    <link rel="stylesheet" href="/src/upload.css?v=cleanup" />
+    <script type="module" src="/src/main.js?v=metadata-ui"></script>
+  </head>
+  <body data-page="upload">
+    <a class="skip-link" href="#page-title">Skip to content</a>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>TRIAD AI</div>
+    </header>
+    <main class="page-shell upload-shell">
+      <h1 id="page-title" tabindex="-1">Upload document</h1>
+      <div id="workspace-account"></div>
+      <nav id="workspace-nav" class="workspace-nav" aria-label="Workspace"></nav>
+      <section id="workspace-content" class="work-section" aria-labelledby="page-title"></section>
+    </main>
+    <noscript>Enable JavaScript to use the document workspace.</noscript>
+  </body>
 </html>

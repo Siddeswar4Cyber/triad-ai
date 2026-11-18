@@ -1,38 +1,39 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Sign in | TRIAD AI</title>
-  <link rel="stylesheet" href="/src/styles.css">
-  <script type="module" src="/src/main.js"></script>
-</head>
-<body data-page="login">
-  <a class="skip-link" href="#page-title">Skip to content</a>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>TRIAD AI</div>
-    <nav aria-label="Main navigation">
-      <a href="/documents.html">Documents</a>
-      <a href="/status.html">System status</a>
-    </nav>
-  </header>
-  <main class="workspace">
-    <div class="intro">
-      <h1>Document<br> Management</h1>
-      <p>Manage documents in your division workspace.</p>
-      <div class="document-art" aria-hidden="true">
-        <span class="orbit orbit-outer"></span><span class="orbit orbit-inner"></span>
-        <span class="orbit-point"></span><span class="paper paper-back"></span>
-        <span class="paper paper-front"><i></i><i></i><i></i></span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in | TRIAD AI</title>
+    <link rel="stylesheet" href="/src/styles.css?v=cleanup" />
+    <script type="module" src="/src/main.js?v=metadata-ui"></script>
+  </head>
+  <body data-page="login">
+    <a class="skip-link" href="#page-title">Skip to content</a>
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>TRIAD AI</div>
+    </header>
+    <main class="workspace auth-workspace">
+      <div class="intro" aria-labelledby="auth-product">
+        <p class="auth-product" id="auth-product">Document management</p>
+        <h2>
+          Your division<br />
+          workspace.
+        </h2>
+        <p>Organize documents, find text in scanned files, and manage access across divisions.</p>
+        <div class="auth-art" aria-hidden="true">
+          <span class="auth-orbit"></span>
+          <span class="auth-sheet auth-sheet-back"></span>
+          <span class="auth-sheet auth-sheet-front"><i></i><i></i><i></i><i></i></span>
+          <span class="auth-orbit-dot"></span>
+        </div>
       </div>
-    </div>
-    <section class="account-panel" aria-labelledby="page-title">
-      <div class="account-content">
-        <h2 id="page-title" tabindex="-1">Welcome back</h2>
-        <div id="auth-content"></div>
-      </div>
-    </section>
-  </main>
-  <noscript>Enable JavaScript to use the document workspace.</noscript>
-</body>
+      <section class="account-panel" aria-labelledby="page-title">
+        <div class="account-content">
+          <h1 id="page-title" tabindex="-1">Welcome back</h1>
+          <div id="auth-content"></div>
+        </div>
+      </section>
+    </main>
+    <noscript>Enable JavaScript to use the document workspace.</noscript>
+  </body>
 </html>

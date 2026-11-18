@@ -5,17 +5,13 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import click
+from divisions import division_name, init_divisions, serialize_division
 from flask import Blueprint, current_app, g, jsonify, request
 from pymongo.errors import DuplicateKeyError, PyMongoError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-
 auth = Blueprint("auth", __name__, url_prefix="/api/auth")
 
-DIVISIONS = {
-    "division-a": "Division A",
-    "division-b": "Division B",
-}
 
 SESSION_LIFETIME = timedelta(hours=8)
 DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
@@ -32,7 +28,7 @@ def public_user(user):
         "id": str(user["_id"]),
         "email": user["email"],
         "division_id": user["division_id"],
-        "division": DIVISIONS[user["division_id"]],
+        "division": division_name(get_database(), user["division_id"]),
         "role": user["role"],
     }
 
@@ -40,6 +36,13 @@ def public_user(user):
 def read_json_object():
     data = request.get_json(silent=True)
     return data if isinstance(data, dict) else {}
+
+
+def read_page():
+    page = int(request.args.get("page", "1"))
+    if not 1 <= page <= 10000:
+        raise ValueError("Page must be between 1 and 10000.")
+    return page
 
 
 def read_credentials(data):
@@ -84,10 +87,12 @@ def require_user(view):
             return unauthorized("Sign in to continue.")
 
         db = get_database()
-        session = db.auth_sessions.find_one({
-            "_id": token_digest(token),
-            "expires_at": {"$gt": datetime.now(timezone.utc)},
-        })
+        session = db.auth_sessions.find_one(
+            {
+                "_id": token_digest(token),
+                "expires_at": {"$gt": datetime.now(timezone.utc)},
+            }
+        )
         if session is None:
             return unauthorized("Your session is invalid or has expired.")
 
@@ -102,27 +107,35 @@ def require_user(view):
     return protected_view
 
 
+def require_admin(view):
+    @require_user
+    @wraps(view)
+    def protected_view(*args, **kwargs):
+        if g.user["role"] != "admin":
+            return jsonify(error="Administrator access is required."), 403
+        return view(*args, **kwargs)
+
+    return protected_view
+
+
 def init_auth_indexes():
     db = get_database()
     db.users.create_index("email", unique=True)
     db.auth_sessions.create_index("expires_at", expireAfterSeconds=0)
-    click.echo("Authentication indexes are ready.")
+    init_divisions(db)
+    click.echo("Authentication indexes and divisions are ready.")
 
 
 @auth.errorhandler(PyMongoError)
 def auth_database_error(error):
-    current_app.logger.warning(
-        "Authentication database operation failed: %s", type(error).__name__
-    )
+    current_app.logger.warning("Authentication database operation failed: %s", type(error).__name__)
     return jsonify(error="Authentication is temporarily unavailable."), 503
 
 
 @auth.get("/divisions")
 def list_divisions():
-    return jsonify(divisions=[
-        {"id": division_id, "name": name}
-        for division_id, name in DIVISIONS.items()
-    ])
+    rows = get_database().divisions.find({"active": True}).sort("name_key", 1)
+    return jsonify(divisions=[serialize_division(row) for row in rows])
 
 
 @auth.post("/register")
@@ -133,7 +146,16 @@ def register():
         return jsonify(error="Enter a valid email and an 8–128 character password."), 400
 
     division_id = data.get("division_id")
-    if not isinstance(division_id, str) or division_id not in DIVISIONS:
+    if (
+        not isinstance(division_id, str)
+        or get_database().divisions.find_one(
+            {
+                "_id": division_id,
+                "active": True,
+            }
+        )
+        is None
+    ):
         return jsonify(error="Select a valid division."), 400
 
     email, password = credentials
@@ -169,11 +191,13 @@ def login():
         return unauthorized("Invalid email or password.")
 
     token = secrets.token_urlsafe(32)
-    db.auth_sessions.insert_one({
-        "_id": token_digest(token),
-        "user_id": user["_id"],
-        "expires_at": datetime.now(timezone.utc) + SESSION_LIFETIME,
-    })
+    db.auth_sessions.insert_one(
+        {
+            "_id": token_digest(token),
+            "user_id": user["_id"],
+            "expires_at": datetime.now(timezone.utc) + SESSION_LIFETIME,
+        }
+    )
 
     response = jsonify(token=token, user=public_user(user))
     response.headers["Cache-Control"] = "no-store"
