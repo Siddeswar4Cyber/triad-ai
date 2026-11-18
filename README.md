@@ -15,6 +15,24 @@ curl.exe -i http://127.0.0.1:5001/api/health
 
 Open [the workspace](http://127.0.0.1:5174/). MongoDB's health check gates service startup. Flask creates authentication and request indexes and seeds Division A, Division B, and Report Type if needed. Keep `MONGODB_URI=mongodb://mongo:27017` for the bundled database. `MONGODB_DATABASE` defaults to `triad_dms`. The Docker stack and self-selected divisions are intended for local demonstration.
 
+## Demo credentials
+
+After completing the [demo seed setup](#realistic-demo-dataset), use these accounts
+at [the sign-in page](http://127.0.0.1:5174/).
+
+**Password for all demo accounts:** `TriadDemo2026!`
+
+| Role | Division | Email |
+|---|---|---|
+| Global admin | Division A | `maya.rao@triad.example.test` |
+| Regular user | Division A | `arun.mehta@triad.example.test` |
+| Regular user | Division B | `sofia.martinez@triad.example.test` |
+| Regular user (reviewer) | Division A | `nisha.shah@triad.example.test` |
+
+The global admin opens the Admin dashboard. Regular users and reviewers open the
+Document Hub. The [full demo account list](#realistic-demo-dataset) includes all
+15 accounts across the five divisions.
+
 ## Try the workflow
 
 To open the app from a phone, connect the phone and this PC to the same Wi-Fi
